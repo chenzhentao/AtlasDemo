@@ -1,0 +1,156 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        jcenter()
+    }
+    dependencies {
+        classpath "com.taobao.android:atlasplugin:2.3.3.beta2"
+    }
+}
+
+group = 'com.taobao.android.atlasdemo'
+version = getEnvValue("versionName", "1.0.0");
+def apVersion = getEnvValue("apVersion", "");
+
+apply plugin: 'com.taobao.atlas.application'
+//TODO do this in plugin
+configurations {
+    providedCompile
+    all*.exclude group: 'com.android.support', module: 'multidex'
+}
+
+repositories {
+    mavenLocal()
+    jcenter()
+}
+android {
+    compileSdkVersion 26
+    buildToolsVersion "28.0.3"
+
+    compileOptions.encoding = 'UTF-8'
+    defaultConfig {
+        versionName version
+        multiDexEnabled true
+
+        ndk {
+            abiFilters "x86", "armeabi"  //默认只启用x86,armeabi
+        }
+
+        resConfigs "en", "fr"
+    }
+    dexOptions {
+        jumboMode = true
+        preDexLibraries = true
+        // javaMaxHeapSize = '2048m'
+    }
+    buildTypes {
+        debug {
+            // debug模式
+            multiDexEnabled true
+        }
+
+        release {
+            multiDexEnabled true
+            shrinkResources false
+            // 是否进行混淆
+            minifyEnabled true
+            proguardFile 'proguard.cfg'
+        }
+
+    }
+    lintOptions {
+        checkReleaseBuilds false
+        // Or, if you prefer, you can continue to check for errors in release builds,
+        // but continue the build even when errors are found:
+        abortOnError false
+    }
+}
+configurations.all {
+
+    resolutionStrategy {
+        cacheChangingModulesFor(0, 'SECONDS')
+        force "com.google.android:support-v4:26.1.0";
+    }
+}
+dependencies {
+    compile 'com.android.support:appcompat-v7:26.1.0'
+    compile 'com.android.support.constraint:constraint-layout:1.1.3'
+    compile("com.taobao.android:firstbundle:${version}@awb")
+
+    //核心sdk
+    compile('com.taobao.android:atlas_core:5.0.6@aar') {
+        transitive = true
+    }
+    //如果不需要用到atlas的动态部署功能，不需要依赖atlasupdate
+    compile 'com.taobao.android:atlasupdate:1.1.4.2@aar'
+
+//    bundleCompile project(':app')
+}
+
+atlas {
+
+    atlasEnabled true
+
+    tBuildConfig {
+        autoStartBundles = ['com.taobao.firstbundle'] //自启动bundle配置
+    }
+
+
+    patchConfigs {
+        debug {
+            createTPatch true
+        }
+    }
+
+
+    buildTypes {
+        debug {
+            if (apVersion) {
+                baseApDependency "com.taobao.android.atlasdemo:AP-debug:${apVersion}@ap"
+                patchConfig patchConfigs.debug
+            }
+        }
+    }
+
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.12'
+    distributionUrl = 'http://services.gradle.org/distributions/gradle-2.12-all.zip'
+}
+
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
+
+publishing {
+    repositories {
+        mavenLocal()
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            artifact "${project.buildDir}/outputs/apk/${project.name}-debug.ap"
+            artifactId "AP-debug"
+        }
+    }
+}
+
+String getEnvValue(key, defValue) {
+    def val = System.getProperty(key);
+    if (null != val) {
+        return val;
+    }
+    val = System.getenv(key);
+    if (null != val) {
+        return val;
+    }
+    return defValue;
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name.contains("DebugAndroidTest")) {
+        task.setEnabled(false);
+    }
+}
